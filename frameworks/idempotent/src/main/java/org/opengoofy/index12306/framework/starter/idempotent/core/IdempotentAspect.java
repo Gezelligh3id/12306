@@ -24,11 +24,11 @@ import org.aspectj.lang.reflect.MethodSignature;
 import org.opengoofy.index12306.framework.starter.idempotent.annotation.Idempotent;
 
 import java.lang.reflect.Method;
-
+// 这段代码实现了一个AOP拦截器，用于在特定的方法（标记为幂等）执行前后进行幂等处理，确保方法在重复执行时保持一致的效果，防止因为重复调用而导致的数据不一致问题。
 /**
  * 幂等注解 AOP 拦截器
  *
- * @公众号：马丁玩编程，回复：加群，添加马哥微信（备注：12306）获取项目资料
+ * 
  */
 @Aspect
 public final class IdempotentAspect {
@@ -36,14 +36,20 @@ public final class IdempotentAspect {
     /**
      * 增强方法标记 {@link Idempotent} 注解逻辑
      */
+    // 这是一个环绕通知，它将在带有@Idempotent注解的方法之前和之后执行。@Around注解指定了切入点表达式，告诉切面应该在哪些方法上生效。
     @Around("@annotation(org.opengoofy.index12306.framework.starter.idempotent.annotation.Idempotent)")
     public Object idempotentHandler(ProceedingJoinPoint joinPoint) throws Throwable {
+        // 获取需要幂等处理的方法的注解
         Idempotent idempotent = getIdempotent(joinPoint);
+        // 从工厂中获取对应的幂等处理器
         IdempotentExecuteHandler instance = IdempotentExecuteHandlerFactory.getInstance(idempotent.scene(), idempotent.type());
         Object resultObj;
         try {
+            // 幂等处理
             instance.execute(joinPoint, idempotent);
+            // 执行业务逻辑
             resultObj = joinPoint.proceed();
+            // 后置处理
             instance.postProcessing();
         } catch (RepeatConsumptionException ex) {
             /**

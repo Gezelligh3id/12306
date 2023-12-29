@@ -45,7 +45,7 @@ import java.util.concurrent.TimeUnit;
  * 分布式缓存之操作 Redis 模版代理
  * 底层通过 {@link RedissonClient}、{@link StringRedisTemplate} 完成外观接口行为
  *
- * @公众号：马丁玩编程，回复：加群，添加马哥微信（备注：12306）获取项目资料
+ * 
  */
 @RequiredArgsConstructor
 public class StringRedisTemplateProxy implements DistributedCache {
@@ -58,6 +58,7 @@ public class StringRedisTemplateProxy implements DistributedCache {
     private static final String SAFE_GET_DISTRIBUTED_LOCK_KEY_PREFIX = "safe_get_distributed_lock_get:";
 
     @Override
+    // 从 Redis 获取指定键的值，并将其反序列化为指定类型的对象。
     public <T> T get(String key, Class<T> clazz) {
         String value = stringRedisTemplate.opsForValue().get(key);
         if (String.class.isAssignableFrom(clazz)) {
@@ -67,11 +68,13 @@ public class StringRedisTemplateProxy implements DistributedCache {
     }
 
     @Override
+    // 将对象序列化为字符串并存储在 Redis 中。
     public void put(String key, Object value) {
         put(key, value, redisProperties.getValueTimeout());
     }
 
     @Override
+    // 条件性批量添加: 使用 Lua 脚本在 Redis 中原子性地进行批量操作，确保所有键不存在时才添加。
     public Boolean putIfAllAbsent(@NotNull Collection<String> keys) {
         DefaultRedisScript<Boolean> actual = Singleton.get(LUA_PUT_IF_ALL_ABSENT_SCRIPT_PATH, () -> {
             DefaultRedisScript redisScript = new DefaultRedisScript();
@@ -108,6 +111,7 @@ public class StringRedisTemplateProxy implements DistributedCache {
     }
 
     @Override
+    // 安全数据获取（safeGet 方法）: 通过布隆过滤器和分布式锁的机制安全地从缓存中获取数据。如果缓存中没有数据，它会使用提供的 CacheLoader 从其他来源加载数据并存入缓存。
     public <T> T safeGet(@NotBlank String key, Class<T> clazz, CacheLoader<T> cacheLoader, long timeout) {
         return safeGet(key, clazz, cacheLoader, timeout, redisProperties.getValueTimeUnit());
     }
@@ -146,6 +150,7 @@ public class StringRedisTemplateProxy implements DistributedCache {
     @Override
     public <T> T safeGet(String key, Class<T> clazz, CacheLoader<T> cacheLoader, long timeout, TimeUnit timeUnit,
                          RBloomFilter<String> bloomFilter, CacheGetFilter<String> cacheGetFilter, CacheGetIfAbsent<String> cacheGetIfAbsent) {
+        // 先读redis缓存
         T result = get(key, clazz);
         // 缓存结果不等于空或空字符串直接返回；通过函数判断是否返回空，为了适配布隆过滤器无法删除的场景；两者都不成立，判断布隆过滤器是否存在，不存在返回空
         if (!CacheUtil.isNullOrBlank(result)
@@ -181,6 +186,7 @@ public class StringRedisTemplateProxy implements DistributedCache {
     }
 
     @Override
+    // 增加了布隆过滤器的支持，以提高操作的安全性。
     public void safePut(String key, Object value, long timeout, RBloomFilter<String> bloomFilter) {
         safePut(key, value, timeout, redisProperties.getValueTimeUnit(), bloomFilter);
     }
@@ -194,6 +200,7 @@ public class StringRedisTemplateProxy implements DistributedCache {
     }
 
     @Override
+    // 检查 Redis 中是否存在指定的键。
     public Boolean hasKey(String key) {
         return stringRedisTemplate.hasKey(key);
     }
@@ -204,16 +211,22 @@ public class StringRedisTemplateProxy implements DistributedCache {
     }
 
     @Override
+    // 统计一组键中实际存在于 Redis 中的键的数量。
     public Long countExistingKeys(String... keys) {
         return stringRedisTemplate.countExistingKeys(Lists.newArrayList(keys));
     }
 
+    // 用于加载数据并设置到缓存中，是 get 和 safeGet 方法的辅助方法。
     private <T> T loadAndSet(String key, CacheLoader<T> cacheLoader, long timeout, TimeUnit timeUnit, boolean safeFlag, RBloomFilter<String> bloomFilter) {
+        // 从cacheLoader加载数据
         T result = cacheLoader.load();
+        // 如果加载数据为空，直接返回
         if (CacheUtil.isNullOrBlank(result)) {
             return result;
         }
+        // 放入缓存
         if (safeFlag) {
+            // 存在布隆过滤器
             safePut(key, result, timeout, timeUnit, bloomFilter);
         } else {
             put(key, result, timeout, timeUnit);
