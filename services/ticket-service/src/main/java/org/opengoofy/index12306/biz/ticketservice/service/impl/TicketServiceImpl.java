@@ -161,21 +161,31 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
         StringRedisTemplate stringRedisTemplate = (StringRedisTemplate) distributedCache.getInstance();
         // 列车查询逻辑较为复杂，详细解析文章查看 https://nageoffer.com/12306/question
         // v1 版本存在严重的性能深渊问题，v2 版本完美的解决了该问题。通过 Jmeter 压测聚合报告得知，性能提升在 300% - 500%+
+        // 根据出发车站code和到达车站code查询redis,multiGet方法是从redis中的hash中获取多个字段的值，获取的是出发地城市和到达地城市。例如 stationDetails = {"北京","杭州"}
         List<Object> stationDetails = stringRedisTemplate.opsForHash()
                 .multiGet(REGION_TRAIN_STATION_MAPPING, Lists.newArrayList(requestParam.getFromStation(), requestParam.getToStation()));
+        // 判断出发车站和到达车站是否为空，即redis中没有缓存出发地code和到达地code对应的城市
         long count = stationDetails.stream().filter(Objects::isNull).count();
         if (count > 0) {
+            // 没有缓存，需要从数据库中查询出发地code和到达地code对应的城市。使用分布式锁
             RLock lock = redissonClient.getLock(LOCK_REGION_TRAIN_STATION_MAPPING);
             lock.lock();
             try {
+                // 使用双重判定锁，再查询一次缓存，如果还是没有就去数据库查询
                 stationDetails = stringRedisTemplate.opsForHash()
                         .multiGet(REGION_TRAIN_STATION_MAPPING, Lists.newArrayList(requestParam.getFromStation(), requestParam.getToStation()));
                 count = stationDetails.stream().filter(Objects::isNull).count();
                 if (count > 0) {
+                    // 缓存中还是没有，去数据库中查询
+                    // 从t_station表中查询所有的车站信息。
                     List<StationDO> stationDOList = stationMapper.selectList(Wrappers.emptyWrapper());
+                    // 创建城市和车站code的映射关系
                     Map<String, String> regionTrainStationMap = new HashMap<>();
+                    // 将映射关系存入redis中
                     stationDOList.forEach(each -> regionTrainStationMap.put(each.getCode(), each.getRegionName()));
+                    
                     stringRedisTemplate.opsForHash().putAll(REGION_TRAIN_STATION_MAPPING, regionTrainStationMap);
+                    // 创建stationDetails，获取出发车站code和到达车站code对应的城市
                     stationDetails = new ArrayList<>();
                     stationDetails.add(regionTrainStationMap.get(requestParam.getFromStation()));
                     stationDetails.add(regionTrainStationMap.get(requestParam.getToStation()));
@@ -198,12 +208,14 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
                             .eq(TrainStationRelationDO::getEndRegion, stationDetails.get(1));
                     List<TrainStationRelationDO> trainStationRelationList = trainStationRelationMapper.selectList(queryWrapper);
                     for (TrainStationRelationDO each : trainStationRelationList) {
+                        // 获取列车信息
                         TrainDO trainDO = distributedCache.safeGet(
                                 TRAIN_INFO + each.getTrainId(),
                                 TrainDO.class,
                                 () -> trainMapper.selectById(each.getTrainId()),
                                 ADVANCE_TICKET_DAY,
                                 TimeUnit.DAYS);
+                        // 获取列车经停站之间的数据集合，因为一旦失效要读取整个列车的令牌并重新赋值
                         TicketListDTO result = new TicketListDTO();
                         result.setTrainId(String.valueOf(trainDO.getId()));
                         result.setTrainNumber(trainDO.getTrainNumber());
