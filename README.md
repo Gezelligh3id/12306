@@ -76,3 +76,7 @@
 当然，业务以及技术上的难点和亮点并不止于这些，更多的信息可以通过代码以及 12306 的使用上进行发掘。
 
 ![](https://images-machen.oss-cn-beijing.aliyuncs.com/1692630338302-112a230f-c0df-4764-a12b-ac5cab805f1f.png)
+
+
+### 资料
+https://zzzyss.top/project/12306/service/%E7%94%A8%E6%88%B7%E6%9C%8D%E5%8A%A1.html
