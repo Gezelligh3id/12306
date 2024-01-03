@@ -179,7 +179,7 @@ public class PassengerServiceImpl implements PassengerService {
     }
 
     @Override
-    // 移除（可能是逻辑删除）一个乘客记录，使用事务。
+    // 删除乘客记录，使用事务。
     public void removePassenger(PassengerRemoveReqDTO requestParam) {
         TransactionDefinition transactionDefinition = new DefaultTransactionDefinition();
         TransactionStatus transactionStatus = transactionManager.getTransaction(transactionDefinition);

@@ -27,7 +27,7 @@ import static org.opengoofy.index12306.biz.userservice.common.constant.Index1230
 public final class UserReuseUtil {
 
     /**
-     * 计算分片位置
+     * 计算分片位置, 在分片结构中分配数据的位置
      */
     public static int hashShardingIdx(String username) {
         return Math.abs(username.hashCode() % USER_REGISTER_REUSE_SHARDING_COUNT);

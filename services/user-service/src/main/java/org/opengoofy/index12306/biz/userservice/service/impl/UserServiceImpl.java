@@ -65,12 +65,19 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserQueryRespDTO queryUserByUsername(String username) {
+        // 构建查询条件，用于在UserDO表中查找匹配给定用户名的记录
         LambdaQueryWrapper<UserDO> queryWrapper = Wrappers.lambdaQuery(UserDO.class)
                 .eq(UserDO::getUsername, username);
+
+        // 使用userMapper的selectOne方法执行查询
         UserDO userDO = userMapper.selectOne(queryWrapper);
+
+        // 检查查询结果，如果未找到用户，抛出ClientException异常
         if (userDO == null) {
             throw new ClientException("用户不存在，请检查用户名是否正确");
         }
+
+        // 将查询到的UserDO对象转换为UserQueryRespDTO对象并返回
         return BeanUtil.convert(userDO, UserQueryRespDTO.class);
     }
 
